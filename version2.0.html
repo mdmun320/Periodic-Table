@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Bohr Atom Explorer - Premium Edition</title>
+    <style>
+        :root { 
+            --neon-blue: #00d2ff; 
+            --neon-purple: #9d00ff;
+            --glass: rgba(15, 15, 35, 0.85);
+            --accent: #ff0055;
+        }
+        
+        body { margin: 0; background-color: #050510; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; color: white; }
+        canvas { display: block; }
+
+        /* Search Bar - Enhanced */
+        #search-container {
+            position: absolute; top: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 100; width: 90%; max-width: 550px;
+        }
+        #el-search {
+            width: 100%; padding: 15px 25px; border-radius: 30px; border: 2px solid var(--neon-blue);
+            font-size: 18px; outline: none; background: rgba(0, 0, 0, 0.6);
+            color: white; backdrop-filter: blur(15px); 
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.4), inset 0 0 10px rgba(0, 210, 255, 0.2);
+            transition: 0.3s;
+        }
+        #el-search:focus { box-shadow: 0 0 30px var(--neon-blue); border-color: #fff; }
+
+        /* Data Display - Large & Responsive */
+        #data-display {
+            position: absolute; background: var(--glass); padding: 25px; border-radius: 25px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8); border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px); display: none; z-index: 90;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Desktop View */
+        @media (min-width: 769px) {
+            #data-display { top: 110px; right: 30px; width: 380px; max-height: 75vh; }
+        }
+
+        /* Mobile View - Large Bottom Sheet */
+        @media (max-width: 768px) {
+            #data-display { bottom: 0; left: 0; transform: none; width: 100%; border-radius: 30px 30px 0 0; max-height: 55vh; box-sizing: border-box; overflow-y: auto; }
+            #el-search { font-size: 16px; padding: 12px 20px; }
+        }
+
+        .header-box { border-bottom: 2px solid var(--neon-blue); margin-bottom: 20px; padding-bottom: 10px; display: flex; align-items: center; gap: 20px; }
+        h2 { color: var(--neon-blue); margin: 0; font-size: 26px; text-shadow: 0 0 10px var(--neon-blue); }
+        .sym-large { font-size: 45px; font-weight: bold; background: linear-gradient(to bottom, #fff, var(--neon-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .info-item { background: rgba(255,255,255,0.07); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .label { color: var(--neon-blue); display: block; font-size: 11px; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
+        .val { font-size: 15px; font-weight: 500; }
+
+        .shell-box { background: linear-gradient(90deg, rgba(0,210,255,0.2), transparent); padding: 10px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid var(--neon-blue); }
+
+        /* Developer Button & Modal */
+        #dev-btn {
+            position: absolute; bottom: 30px; right: 30px; z-index: 101;
+            width: 60px; height: 60px; border-radius: 50%; background: var(--neon-purple);
+            border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 20px var(--neon-purple); transition: 0.3s;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(157, 0, 255, 0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(157, 0, 255, 0); } 100% { transform: scale(1); } }
+        
+        #dev-modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+            width: 300px; background: rgba(10, 10, 25, 0.98); border: 2px solid var(--neon-purple);
+            border-radius: 25px; padding: 30px; z-index: 200; display: none; opacity: 0;
+            transition: 0.3s; text-align: center; backdrop-filter: blur(20px);
+        }
+        #dev-modal.active { display: block; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .dev-link { display: block; padding: 12px; margin: 10px 0; border-radius: 10px; background: rgba(255,255,255,0.05); color: #fff; text-decoration: none; transition: 0.3s; font-size: 14px; }
+        .dev-link:hover { background: var(--neon-purple); transform: translateX(5px); }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div id="search-container">
+    <input type="text" id="el-search" placeholder="মৌলের নাম বা সংখ্যা লিখুন...">
+</div>
+
+<div id="data-display">
+    <div class="header-box">
+        <span class="sym-large" id="m-sym">H</span>
+        <h2 id="m-name">Hydrogen</h2>
+    </div>
+    
+    <div class="shell-box">
+        <span class="label">ইলেক্ট্রন বিন্যাস (Shells)</span>
+        <div id="m-shell-val" style="font-weight: bold; letter-spacing: 3px;">2, 8, 1</div>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-item"><span class="label">পারমাণবিক সংখ্যা</span><span class="val" id="m-num">-</span></div>
+        <div class="info-item"><span class="label">পারমাণবিক ভর</span><span class="val" id="m-mass">-</span></div>
+        <div class="info-item"><span class="label">গলনাঙ্ক</span><span class="val" id="m-melt">-</span></div>
+        <div class="info-item"><span class="label">ফুটনাঙ্ক</span><span class="val" id="m-boil">-</span></div>
+    </div>
+    
+    <div style="font-size: 14px; color: #bbb; line-height: 1.6;">
+        <p><b style="color: var(--neon-blue);">ব্যবহার:</b> <span id="m-desc">-</span></p>
+    </div>
+</div>
+
+<button id="dev-btn" title="Contact Developer">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08s5.97 1.09 6 3.08c-1.29 1.94-3.5 3.22-6 3.22z"/></svg>
+</button>
+
+<div id="dev-modal">
+    <span class="close-btn" onclick="toggleModal()">&times;</span>
+    <h3 style="color: var(--neon-purple); margin-top: 0;">Developer Info</h3>
+    <p style="font-size: 12px; color: #888;">Created by MRM MD MUN</p>
+    <a href="tel:+8809638575491" class="dev-link">📞 +8809638575491</a>
+    <a href="mailto:mrmmdmun320@gmail.com" class="dev-link">✉️ Send Email</a>
+    <a href="https://www.facebook.com/share/14bzPtRQnLb/" target="_blank" class="dev-link">🌐 Facebook Profile</a>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+    // ১১৮টি মৌলের ডাটাবেজ (আগের মতোই থাকবে)
+    const elementDB = [ { num: 1, sym: "H", name: "Hydrogen", mass: "1.008", melt: "-259.1 °C", boil: "-252.9 °C", origin: "বিগ ব্যাং-এর সময় উৎপন্ন হয়।", desc: "রকেট জ্বালানি এবং অ্যামোনিয়া তৈরিতে ব্যবহৃত হয়।", tags: ["জ্বালানি", "হালকা"] },
+        { num: 2, sym: "He", name: "Helium", mass: "4.002", melt: "-272.2 °C", boil: "-268.9 °C", origin: "প্রাকৃতিক গ্যাসক্ষেত্র থেকে পাওয়া যায়।", desc: "বেলুন এবং এমআরআই মেশিনে কুল্যান্ট হিসেবে ব্যবহৃত হয়।", tags: ["বেলুন", "নিষ্ক্রিয়"] },
+        { num: 3, sym: "Li", name: "Lithium", mass: "6.94", melt: "180.5 °C", boil: "1342 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "মোবাইল ও ল্যাপটপের ব্যাটারি তৈরিতে অপরিহার্য।", tags: ["ব্যাটারি", "ধাতু"] },
+        { num: 4, sym: "Be", name: "Beryllium", mass: "9.012", melt: "1287 °C", boil: "2469 °C", origin: "বেরিল খনিজ থেকে পাওয়া যায়।", desc: "মহাকাশযান এবং এক্স-রে উইন্ডো তৈরিতে ব্যবহৃত হয়।", tags: ["মহাকাশ", "এক্স-রে"] },
+        { num: 5, sym: "B", name: "Boron", mass: "10.81", melt: "2076 °C", boil: "3927 °C", origin: "বোরাক্স আকরিক থেকে পাওয়া যায়।", desc: "গ্লাস এবং সিরামিককে তাপসহ করতে ব্যবহৃত হয়।", tags: ["কাঁচ", "সার"] },
+        { num: 6, sym: "C", name: "Carbon", mass: "12.01", melt: "3550 °C", boil: "4827 °C", origin: "কয়লা ও হীরা হিসেবে পাওয়া যায়।", desc: "জীবনের প্রধান ভিত্তি। পেন্সিলে গ্রাফাইট হিসেবে থাকে।", tags: ["জীবন", "হীরা"] },
+        { num: 7, sym: "N", name: "Nitrogen", mass: "14.00", melt: "-210 °C", boil: "-195.8 °C", origin: "বায়ুমণ্ডল থেকে পাওয়া যায়।", desc: "খাদ্য সংরক্ষণে এবং তরল হিমায়ক হিসেবে ব্যবহৃত হয়।", tags: ["গ্যাস", "সংরক্ষণ"] },
+        { num: 8, sym: "O", name: "Oxygen", mass: "15.99", melt: "-218.8 °C", boil: "-183 °C", origin: "সালোকসংশ্লেষণ প্রক্রিয়ায় উৎপন্ন হয়।", desc: "শ্বাসপ্রশ্বাস এবং দহনের জন্য অপরিহার্য।", tags: ["জীবন", "অক্সাইড"] },
+        { num: 9, sym: "F", name: "Fluorine", mass: "18.99", melt: "-219.7 °C", boil: "-188.1 °C", origin: "ফ্লোরাইড খনিজ থেকে পাওয়া যায়।", desc: "টুথপেস্টে এবং রেফ্রিজারেটর গ্যাসে ব্যবহৃত হয়।", tags: ["দাঁত", "সক্রিয়"] },
+        { num: 10, sym: "Ne", name: "Neon", mass: "20.18", melt: "-248.6 °C", boil: "-246.1 °C", origin: "বায়ু থেকে আলাদা করা হয়।", desc: "উজ্জ্বল বিজ্ঞাপনী আলো তৈরিতে ব্যবহৃত হয়।", tags: ["আলো", "নিষ্ক্রিয়"] },
+        { num: 11, sym: "Na", name: "Sodium", mass: "22.99", melt: "97.7 °C", boil: "883 °C", origin: "খাবার লবণ থেকে উৎপন্ন হয়।", desc: "নরম ধাতু। স্ট্রিট লাইট ও লবণের প্রধান উপাদান।", tags: ["লবণ", "নরম ধাতু"] },
+        { num: 12, sym: "Mg", name: "Magnesium", mass: "24.31", melt: "650 °C", boil: "1090 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "গাছের ক্লোরোফিলের প্রাণ। আতশবাজিতে ব্যবহৃত হয়।", tags: ["গাছ", "আতশবাজি"] },
+        { num: 13, sym: "Al", name: "Aluminum", mass: "26.98", melt: "660.3 °C", boil: "2470 °C", origin: "বক্সাইট আকরিক থেকে পাওয়া যায়।", desc: "উড়োজাহাজের বডি এবং ফয়েল পেপারে ব্যবহৃত হয়।", tags: ["বিমান", "ফয়েল"] },
+        { num: 14, sym: "Si", name: "Silicon", mass: "28.09", melt: "1414 °C", boil: "3265 °C", origin: "বালু থেকে প্রচুর পাওয়া যায়।", desc: "কম্পিউটার চিপ ও সোলার প্যানেল তৈরিতে ব্যবহৃত হয়।", tags: ["টেক", "চিপ"] },
+        { num: 15, sym: "P", name: "Phosphorus", mass: "30.97", melt: "44.1 °C", boil: "280.5 °C", origin: "ফসফেট শিলা থেকে পাওয়া যায়।", desc: "দিয়াশলাই শিল্পে ও ডিএনএ তৈরিতে লাগে।", tags: ["হাড়", "দিয়াশলাই"] },
+        { num: 16, sym: "S", name: "Sulfur", mass: "32.06", melt: "115.2 °C", boil: "444.6 °C", origin: "আগ্নেয়গিরির কাছে পাওয়া যায়।", desc: "হলুদ অধাতু। সার এবং ওষুধের কাজে ব্যবহৃত হয়।", tags: ["ওষুধ", "হলুদ"] },
+        { num: 17, sym: "Cl", name: "Chlorine", mass: "35.45", melt: "-101.5 °C", boil: "-34.04 °C", origin: "লবণ থেকে পাওয়া হয়।", desc: "পানি জীবাণুমুক্ত করতে এবং ব্লিচিং পাউডারে ব্যবহৃত হয়।", tags: ["বিশুদ্ধতা", "গ্যাস"] },
+        { num: 18, sym: "Ar", name: "Argon", mass: "39.95", melt: "-189.3 °C", boil: "-185.8 °C", origin: "বায়ুমণ্ডল থেকে পাওয়া যায়।", desc: "বৈদ্যুতিক বাল্বের ভেতর ফিলামেন্ট রক্ষা করতে থাকে।", tags: ["বাল্ব", "নিষ্ক্রিয়"] },
+        { num: 19, sym: "K", name: "Potassium", mass: "39.10", melt: "63.5 °C", boil: "759 °C", origin: "খনিজ লবণ থেকে পাওয়া যায়।", desc: "সক্রিয় ধাতু। স্নায়বিক সংকেত পরিবহনে ব্যবহৃত হয়।", tags: ["স্নায়ু", "সার"] },
+        { num: 20, sym: "Ca", name: "Calcium", mass: "40.08", melt: "842 °C", boil: "1484 °C", origin: "চুনাপাথর থেকে পাওয়া যায়।", desc: "হাড় ও দাঁতের মূল উপাদান। সিমেন্ট তৈরিতে লাগে।", tags: ["হাড়", "সিমেন্ট"] },
+        { num: 21, sym: "Sc", name: "Scandium", mass: "44.96", melt: "1541 °C", boil: "2830 °C", origin: "বিরল খনিজ থেকে পাওয়া যায়।", desc: "বাইসাইকেল ও এরোপ্লেনে সংকর ধাতু হিসেবে থাকে।", tags: ["সংকর", "স্পোর্টস"] },
+        { num: 22, sym: "Ti", name: "Titanium", mass: "47.87", melt: "1668 °C", boil: "3287 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "শক্তিশালী ও হালকা ধাতু। জেট ইঞ্জিনে ব্যবহৃত হয়।", tags: ["মেডিকেল", "জেট"] },
+        { num: 23, sym: "V", name: "Vanadium", mass: "50.94", melt: "1910 °C", boil: "3407 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "ইস্পাতকে ঘাতসহ ও শক্ত করতে ব্যবহৃত হয়।", tags: ["ইস্পাত", "টুলস"] },
+        { num: 24, sym: "Cr", name: "Chromium", mass: "52.00", melt: "1907 °C", boil: "2671 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "স্টেইনলেস স্টিল ও মরিচারোধী প্রলেপ দিতে ব্যবহৃত হয়।", tags: ["চকচকে", "স্টিল"] },
+        { num: 25, sym: "Mn", name: "Manganese", mass: "54.94", melt: "1246 °C", boil: "2061 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "রেললাইন ও ইস্পাতকে শক্ত করতে ব্যবহৃত হয়।", tags: ["রেল", "শক্ত"] },
+        { num: 26, sym: "Fe", name: "Iron", mass: "55.85", melt: "1538 °C", boil: "2862 °C", origin: "পৃথিবীর ভূত্বকের প্রধান উপাদান।", desc: "নির্মাণ কাজ ও রক্তে হিমোগ্লোবিন হিসেবে থাকে।", tags: ["নির্মাণ", "রক্ত"] },
+        { num: 27, sym: "Co", name: "Cobalt", mass: "58.93", melt: "1495 °C", boil: "2927 °C", origin: "উপজাত হিসেবে পাওয়া যায়।", desc: "চুম্বক ও ক্যানসার চিকিৎসায় ব্যবহৃত হয়।", tags: ["চুম্বক", "ক্যানসার"] },
+        { num: 28, sym: "Ni", name: "Nickel", mass: "58.69", melt: "1455 °C", boil: "2730 °C", origin: "পৃথিবীর কেন্দ্রে প্রচুর আছে।", desc: "মুদ্রা ও স্টেইনলেস স্টিল তৈরিতে ব্যবহৃত।", tags: ["মুদ্রা", "প্রলেপ"] },
+        { num: 29, sym: "Cu", name: "Copper", mass: "63.55", melt: "1085 °C", boil: "2562 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "বিদ্যুতের চমৎকার পরিবাহী। বৈদ্যুতিক তারে ব্যবহৃত।", tags: ["বিদ্যুৎ", "তামা"] },
+        { num: 30, sym: "Zn", name: "Zinc", mass: "65.38", melt: "419.5 °C", boil: "907 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "গ্যালভানাইজিং বা মরিচারোধী প্রলেপ দিতে ব্যবহৃত।", tags: ["সুরক্ষা", "স্বাস্থ্য"] },
+        { num: 31, sym: "Ga", name: "Gallium", mass: "69.72", melt: "29.76 °C", boil: "2204 °C", origin: "বক্সাইট আকরিক।", desc: "হাতের তালুর গরমে গলে যায়। লেজারে ব্যবহৃত হয়।", tags: ["তরল ধাতু", "লেজার"] },
+        { num: 32, sym: "Ge", name: "Germanium", mass: "72.63", melt: "938.3 °C", boil: "2833 °C", origin: "কয়লা ও দস্তা আকরিক।", desc: "ফাইবার অপটিক্স এবং ক্যামেরা লেন্সে ব্যবহৃত হয়।", tags: ["লেন্স", "টেক"] },
+        { num: 33, sym: "As", name: "Arsenic", mass: "74.92", melt: "817 °C", boil: "614 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "বিষাক্ত উপধাতু। সেমিকন্ডাক্টর ডোপিংয়ে ব্যবহৃত।", tags: ["বিষাক্ত", "উপধাতু"] },
+        { num: 34, sym: "Se", name: "Selenium", mass: "78.97", melt: "221 °C", boil: "685 °C", origin: "তামা শোধনের উপজাত।", desc: "সোলার সেলে এবং ফটোকপিয়ারে ব্যবহৃত হয়।", tags: ["সোলার", "স্বাস্থ্য"] },
+        { num: 35, sym: "Br", name: "Bromine", mass: "79.90", melt: "-7.2 °C", boil: "58.8 °C", origin: "সমুদ্রের পানি।", desc: "একমাত্র তরল অধাতু। অগ্নি নির্বাপক কাজে লাগে।", tags: ["তরল অধাতু", "ওষুধ"] },
+        { num: 36, sym: "Kr", name: "Krypton", mass: "83.80", melt: "-157.4 °C", boil: "-153.2 °C", origin: "বাতাস থেকে পাওয়া যায়।", desc: "ফটোগ্রাফিক ফ্ল্যাশ এবং লেজারে ব্যবহৃত হয়।", tags: ["ফ্ল্যাশ", "নিষ্ক্রিয়"] },
+        { num: 37, sym: "Rb", name: "Rubidium", mass: "85.47", melt: "39.3 °C", boil: "688 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "পারমাণবিক ঘড়ি এবং বিশেষ গ্লাস তৈরিতে লাগে।", tags: ["সক্রিয়", "ঘড়ি"] },
+        { num: 38, sym: "Sr", name: "Strontium", mass: "87.62", melt: "777 °C", boil: "1377 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "আতশবাজিতে টকটকে লাল রঙ তৈরি করতে ব্যবহৃত।", tags: ["আতশবাজি", "লাল"] },
+        { num: 39, sym: "Y", name: "Yttrium", mass: "88.90", melt: "1522 °C", boil: "3345 °C", origin: "মোনাজাইট বালু।", desc: "টিভির লাল রঙ এবং ক্যানসার চিকিৎসায় ব্যবহৃত।", tags: ["টিভি", "মেডিকেল"] },
+        { num: 40, sym: "Zr", name: "Zirconium", mass: "91.22", melt: "1855 °C", boil: "4409 °C", origin: "জিরকন খনিজ।", desc: "পারমাণবিক চুল্লির ফুয়েল রড তৈরিতে ব্যবহৃত।", tags: ["নিউক্লিয়ার", "মজবুত"] },
+        { num: 41, sym: "Nb", name: "Niobium", mass: "92.90", melt: "2477 °C", boil: "4744 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "সুপারকন্ডাক্টিং চুম্বক ও জেট ইঞ্জিনে ব্যবহৃত।", tags: ["চুম্বক", "জেট"] },
+        { num: 42, sym: "Mo", name: "Molybdenum", mass: "95.95", melt: "2623 °C", boil: "4639 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "উচ্চ গলনাঙ্ক বিশিষ্ট ধাতু। যুদ্ধবিমানের যন্ত্রাংশে ব্যবহৃত।", tags: ["প্রতিরক্ষা", "ইস্পাত"] },
+        { num: 43, sym: "Tc", name: "Technetium", mass: "98", melt: "2157 °C", boil: "4265 °C", origin: "কৃত্রিমভাবে তৈরি।", desc: "মেডিকেল ইমেজিং বা স্ক্যানিংয়ে ব্যবহৃত হয়।", tags: ["রেডিওঅ্যাক্টিভ", "স্ক্যান"] },
+        { num: 44, sym: "Ru", name: "Ruthenium", mass: "101.07", melt: "2334 °C", boil: "4150 °C", origin: "প্লাটিনাম আকরিক।", desc: "ইলেকট্রনিক্স চিপে এবং অনুঘটক হিসেবে ব্যবহৃত।", tags: ["বিরল", "চিপ"] },
+        { num: 45, sym: "Rh", name: "Rhodium", mass: "102.90", melt: "1964 °C", boil: "3695 °C", origin: "উপজাত হিসেবে পাওয়া যায়।", desc: "দামী ধাতু। গাড়ির ক্যাটালাইটিক কনভার্টারে ব্যবহৃত।", tags: ["মূল্যবান", "গাড়ি"] },
+        { num: 46, sym: "Pd", name: "Palladium", mass: "106.42", melt: "1555 °C", boil: "2963 °C", origin: "খনি থেকে পাওয়া যায়।", desc: "গয়না তৈরিতে এবং হাইড্রোজেন শোষণে ব্যবহৃত।", tags: ["গয়না", "ফিল্টার"] },
+        { num: 47, sym: "Ag", name: "Silver", mass: "107.87", melt: "961.8 °C", boil: "2162 °C", origin: "মুক্ত অবস্থায় পাওয়া যায়।", desc: "সেরা বিদ্যুৎ পরিবাহী। গয়না ও আয়নায় ব্যবহৃত।", tags: ["রূপা", "পরিবাহী"] },
+        { num: 48, sym: "Cd", name: "Cadmium", mass: "112.41", melt: "321.1 °C", boil: "767 °C", origin: "দস্তার উপজাত।", desc: "রিচার্জেবল ব্যাটারি (Ni-Cd) তৈরিতে ব্যবহৃত হয়।", tags: ["ব্যাটারি", "বিষাক্ত"] },
+        { num: 49, sym: "In", name: "Indium", mass: "114.81", melt: "156.6 °C", boil: "2072 °C", origin: "দস্তা আকরিক।", desc: "টাচস্ক্রিন (ITO) তৈরিতে অপরিহার্য।", tags: ["টাচস্ক্রিন", "নরম"] },
+        { num: 50, sym: "Sn", name: "Tin", mass: "118.71", melt: "231.9 °C", boil: "2602 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "খাবারের ক্যান এবং সোল্ডারিং তারে ব্যবহৃত।", tags: ["ক্যান", "সোল্ডারিং"] },
+        { num: 51, sym: "Sb", name: "Antimony", mass: "121.76", melt: "630.6 °C", boil: "1587 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "ইনফ্রারেড ডিটেক্টরে ব্যবহৃত হয়।", tags: ["ডিটেক্টর", "উপধাতু"] },
+        { num: 52, sym: "Te", name: "Tellurium", mass: "127.60", melt: "449.5 °C", boil: "988 °C", origin: "তামা শোধনের উপজাত।", desc: "সোলার প্যানেল ও থার্মোইলেকট্রিক ডিভাইসে ব্যবহৃত।", tags: ["সোলার", "টেক"] },
+        { num: 53, sym: "I", name: "Iodine", mass: "126.90", melt: "113.7 °C", boil: "184.3 °C", origin: "সমুদ্রের আগাছা।", desc: "অ্যান্টিসেপটিক এবং থাইরয়েড চিকিৎসায় ব্যবহৃত।", tags: ["স্বাস্থ্য", "বেগুনি"] },
+        { num: 54, sym: "Xe", name: "Xenon", mass: "131.29", melt: "-111.8 °C", boil: "-108.1 °C", origin: "বাতাস থেকে পাওয়া যায়।", desc: "ফ্ল্যাশ ল্যাম্প এবং আয়ন ইঞ্জিনে ব্যবহৃত।", tags: ["ফ্ল্যাশ", "ইঞ্জিন"] },{ num: 55, sym: "Cs", name: "Cesium", mass: "132.90", melt: "28.4 °C", boil: "671 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "নির্ভুল পারমাণবিক ঘড়ি তৈরিতে ব্যবহৃত হয়।", tags: ["সময়", "সক্রিয়"] },
+        { num: 56, sym: "Ba", name: "Barium", mass: "137.32", melt: "727 °C", boil: "1897 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "এক্স-রে পরীক্ষায় এবং সবুজ আতশবাজিতে ব্যবহৃত।", tags: ["এক্স-রে", "সবুজ"] },
+        { num: 57, sym: "La", name: "Lanthanum", mass: "138.90", melt: "920 °C", boil: "3464 °C", origin: "মোনাজাইট বালু।", desc: "ক্যামেরা লেন্স ও নাইট ভিশন চশমায় ব্যবহৃত।", tags: ["লেন্স", "নাইট ভিশন"] },
+        { num: 58, sym: "Ce", name: "Cerium", mass: "140.11", melt: "795 °C", boil: "3443 °C", origin: "ল্যান্থানাইড খনিজ।", desc: "লাইটারের পাথর ও গাড়ির ইঞ্জিনে ব্যবহৃত।", tags: ["লাইটার", "পরিবেশ"] },
+        { num: 59, sym: "Pr", name: "Praseodymium", mass: "140.90", melt: "935 °C", boil: "3130 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "মজবুত চুম্বক ও ওয়েল্ডিং হেলমেটে ব্যবহৃত।", tags: ["চুম্বক", "ওয়েল্ডিং"] },
+        { num: 60, sym: "Nd", name: "Neodymium", mass: "144.24", melt: "1024 °C", boil: "3074 °C", origin: "খনি থেকে পাওয়া যায়।", desc: "হেডফোন ও হার্ড ড্রাইভের শক্তিশালী চুম্বক।", tags: ["চুম্বক", "হেডফোন"] },
+        { num: 61, sym: "Pm", name: "Promethium", mass: "145", melt: "1042 °C", boil: "3000 °C", origin: "ইউরেনিয়াম ফিশন।", desc: "পারমাণবিক ব্যাটারি ও উজ্জ্বল ঘড়ির ডায়ালে ব্যবহৃত।", tags: ["তেজস্ক্রিয়", "ব্যাটারি"] },{ num: 62, sym: "Sm", name: "Samarium", mass: "150.36", melt: "1072 °C", boil: "1794 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "শক্তিশালী চুম্বক ও ক্যানসার চিকিৎসায় ব্যবহৃত।", tags: ["চুম্বক", "মেডিকেল"] },
+        { num: 63, sym: "Eu", name: "Europium", mass: "151.96", melt: "822 °C", boil: "1529 °C", origin: "আকরিক থেকে সংগ্রহ।", desc: "স্মার্টফোন ও টিভির পর্দায় লাল রঙ তৈরিতে লাগে।", tags: ["স্ক্রিন", "রঙিন"] },
+        { num: 64, sym: "Gd", name: "Gadolinium", mass: "157.25", melt: "1313 °C", boil: "3250 °C", origin: "বিরল খনিজ।", desc: "এমআরআই (MRI) স্ক্যানিংয়ে কন্ট্রাস্ট এজেন্ট হিসেবে লাগে।", tags: ["MRI", "নিউক্লিয়ার"] },
+        { num: 65, sym: "Tb", name: "Terbium", mass: "158.92", melt: "1356 °C", boil: "3230 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "ফ্লুরোসেন্ট ল্যাম্প ও লেজার ডিভাইসে ব্যবহৃত।", tags: ["লেজার", "আলো"] },
+        { num: 66, sym: "Dy", name: "Dysprosium", mass: "162.50", melt: "1412 °C", boil: "2567 °C", origin: "মোনাজাইট বালু।", desc: "ইলেকট্রিক গাড়ির মোটর ও পারমাণবিক চুল্লিতে ব্যবহৃত।", tags: ["ই-কার", "চুম্বক"] },
+        { num: 67, sym: "Ho", name: "Holmium", mass: "164.93", melt: "1474 °C", boil: "2700 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "শক্তিশালী চৌম্বকীয় ক্ষেত্র ও লেজারে ব্যবহৃত।", tags: ["চৌম্বক", "লেজার"] },
+        { num: 68, sym: "Er", name: "Erbium", mass: "167.25", melt: "1529 °C", boil: "2868 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "ফাইবার অপটিক কেবল ও সিগন্যাল অ্যামপ্লিফায়ারে ব্যবহৃত।", tags: ["ইন্টারনেট", "অপটিক্যাল"] },
+        { num: 69, sym: "Tm", name: "Thulium", mass: "168.93", melt: "1545 °C", boil: "1950 °C", origin: "খনি থেকে পাওয়া যায়।", desc: "বহনযোগ্য এক্স-রে মেশিন ও লেজার সার্জারিতে ব্যবহৃত।", tags: ["এক্স-রে", "সার্জারি"] },
+        { num: 70, sym: "Yb", name: "Ytterbium", mass: "173.05", melt: "819 °C", boil: "1196 °C", origin: "খনিজ থেকে পাওয়া যায়।", desc: "নির্ভুল আণবিক ঘড়ি ও স্পেশাল ইস্পাতে ব্যবহৃত।", tags:["ঘড়ি", "ইস্পাত"] },
+        { num: 71, sym: "Lu", name: "Lutetium", mass: "174.96", melt: "1663 °C", boil: "3402 °C", origin: "উপজাত হিসেবে পাওয়া যায়।", desc: "ক্যানসার থেরাপি ও পেট (PET) স্ক্যানিংয়ে ব্যবহৃত।", tags: ["ক্যানসার", "স্ক্যান"] },
+        { num: 72, sym: "Hf", name: "Hafnium", mass: "178.49", melt: "2233 °C", boil: "4603 °C", origin: "জিরকোনিয়াম আকরিক।", desc: "পারমাণবিক চুল্লি ও প্রসেসর (CPU) তৈরিতে ব্যবহৃত।", tags: ["প্রসেসর", "নিউক্লিয়ার"] },
+        { num: 73, sym: "Ta", name: "Tantalum", mass: "180.94", melt: "3017 °C", boil: "5458 °C", origin: "কোল্টান আকরিক।", desc: "ফোন ও ল্যাপটপের ক্যাপাসিটর তৈরিতে ব্যবহৃত।", tags: ["ফোন", "ক্যাপাসিটর"] },
+        { num: 74, sym: "W", name: "Tungsten", mass: "183.84", melt: "3422 °C", boil: "5555 °C", origin: "খনিজ থেকে পাওয়া হয়।", desc: "বাল্বের ফিলামেন্ট ও রকেট নজলে ব্যবহৃত।", tags: ["ফিলামেন্ট", "রকেট"] },
+        { num: 75, sym: "Re", name: "Rhenium", mass: "186.20", melt: "3186 °C", boil: "5596 °C", origin: "উপজাত হিসেবে পাওয়া যায়।", desc: "জেট ইঞ্জিনের সুপার-অ্যালয় তৈরিতে ব্যবহৃত।", tags: ["জেট ইঞ্জিন", "উচ্চ তাপ"] },
+        { num: 76, sym: "Os", name: "Osmium", mass: "190.23", melt: "3033 °C", boil: "5012 °C", origin: "প্লাটিনাম আকরিক।", desc: "প্রকৃতির সবচেয়ে ঘন মৌল। ফাউন্টেন পেন নিবে ব্যবহৃত।", tags: ["ঘন", "পেন নিব"] },
+        { num: 77, sym: "Ir", name: "Iridium", mass: "192.21", melt: "2446 °C", boil: "4428 °C", origin: "উল্কাপিন্ড ও আকরিক।", desc: "সবচেয়ে বেশি ক্ষয় প্রতিরোধী ধাতু। স্পার্ক প্লাগে ব্যবহৃত।", tags: ["মজবুত", "উল্কা"] },
+        { num: 78, sym: "Pt", name: "Platinum", mass: "195.08", melt: "1768 °C", boil: "3825 °C", origin: "খনি থেকে পাওয়া যায়।", desc: "সাদা সোনা। গয়না ও দূষণ নিয়ন্ত্রণে ব্যবহৃত।", tags: ["গয়না", "পরিবেশ"] },
+        { num: 79, sym: "Au", name: "Gold", mass: "196.97", melt: "1064 °C", boil: "2856 °C", origin: "মুক্ত অবস্থায় পাওয়া যায়।", desc: "সবচেয়ে নমনীয় ধাতু। মুদ্রা ও অলঙ্কারে ব্যবহৃত।", tags: ["স্বর্ণ", "মুদ্রা"] },
+        { num: 80, sym: "Hg", name: "Mercury", mass: "200.59", melt: "-38.8 °C", boil: "356.7 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "একমাত্র তরল ধাতু। থার্মোমিটারে ব্যবহৃত হয়।", tags: ["তরল ধাতু", "পারদ"] },
+        { num: 81, sym: "Tl", name: "Thallium", mass: "204.38", melt: "304 °C", boil: "1473 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "বিষাক্ত ধাতু। ইনফ্রারেড গ্লাসে ব্যবহৃত হয়।", tags: ["বিষাক্ত", "ইনফ্রারেড"] },{ num: 82, sym: "Pb", name: "Lead", mass: "207.2", melt: "327.5 °C", boil: "1749 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "ভারী ধাতু। এক্স-রে সুরক্ষা কবচ ও ব্যাটারিতে ব্যবহৃত।", tags: ["সুরক্ষা", "ব্যাটারি"] },
+        { num: 83, sym: "Bi", name: "Bismuth", mass: "208.98", melt: "271.4 °C", boil: "1564 °C", origin: "মুক্ত অবস্থায় পাওয়া যায়।", desc: "সিসার বিকল্প হিসেবে ওষুধে ব্যবহৃত হয়।", tags: ["ওষুধ", "অগ্নি নির্বাপক"] },
+        { num: 84, sym: "Po", name: "Polonium", mass: "209", melt: "254 °C", boil: "962 °C", origin: "মাদাম কুরি আবিষ্কার করেন।", desc: "তেজস্ক্রিয় মৌল। মহাকাশযানে তাপ উৎপাদক।", tags: ["তেজস্ক্রিয়", "মহাকাশ"] },
+        { num: 85, sym: "At", name: "Astatine", mass: "210", melt: "302 °C", boil: "337 °C", origin: "পৃথিবীর সবচেয়ে বিরল মৌল।", desc: "অত্যন্ত ক্ষণস্থায়ী ও ক্যানসার চিকিৎসায় গবেষণাধীন।", tags: ["বিরল", "তেজস্ক্রিয়"] },
+        { num: 86, sym: "Rn", name: "Radon", mass: "222", melt: "-71 °C", boil: "-61.7 °C", origin: "তেজস্ক্রিয় ক্ষয় থেকে উৎপন্ন।", desc: "ভূমিকম্প গবেষণা ও ক্যানসার চিকিৎসায় ব্যবহৃত।", tags: ["গ্যাস", "রেডিয়েশন"] },
+        { num: 87, sym: "Fr", name: "Francium", mass: "223", melt: "27 °C", boil: "677 °C", origin: "ইউরেনিয়াম আকরিক।", desc: "অত্যন্ত অস্থির এবং দ্রুত বিলীন হয়ে যায়।", tags: ["অস্থির", "বিরল"] },
+        { num: 88, sym: "Ra", name: "Radium", mass: "226", melt: "700 °C", boil: "1737 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "অন্ধকারে উজ্জ্বল দেখায়। চিকিৎসায় ব্যবহৃত হয়।", tags: ["উজ্জ্বল", "মাদাম কুরি"] },
+        { num: 89, sym: "Ac", name: "Actinium", mass: "227", melt: "1050 °C", boil: "3200 °C", origin: "ইউরেনিয়াম আকরিক।", desc: "নীল আলো বিকিরণকারী তেজস্ক্রিয় ধাতু।", tags: ["নীল আভা", "নিউক্লিয়ার"] },
+        { num: 90, sym: "Th", name: "Thorium", mass: "232.03", melt: "1750 °C", boil: "4788 °C", origin: "মোনাজাইট বালু।", desc: "নিরাপদ পারমাণবিক জ্বালানি হিসেবে আশাপ্রদ।", tags: ["জ্বালানি", "ভবিষ্যৎ"] },
+        { num: 91, sym: "Pa", name: "Protactinium", mass: "231.04", melt: "1568 °C", boil: "4027 °C", origin: "ইউরেনিয়াম আকরিক।", desc: "উচ্চ তেজস্ক্রিয় ধাতু। গবেষণায় ব্যবহৃত হয়।", tags: ["তেজস্ক্রিয়", "বিরল"] },
+        { num: 92, sym: "U", name: "Uranium", mass: "238.03", melt: "1132 °C", boil: "4131 °C", origin: "আকরিক থেকে পাওয়া যায়।", desc: "পারমাণবিক বিদ্যুৎ কেন্দ্রের প্রধান জ্বালানি।", tags: ["নিউক্লিয়ার", "জ্বালানি"] },
+        { num: 93, sym: "Np", name: "Neptunium", mass: "237", melt: "644 °C", boil: "3902 °C", origin: "কৃত্রিমভাবে তৈরি।", desc: "নিউট্রন ডিটেক্টর ডিভাইসে ব্যবহৃত হয়।", tags: ["কৃত্রিম", "ডিটেক্টর"] },
+        { num: 94, sym: "Pu", name: "Plutonium", mass: "244", melt: "640 °C", boil: "3228 °C", origin: "ইউরেনিয়াম থেকে তৈরি।", desc: "পারমাণবিক বোমা ও মহাকাশযানের শক্তির উৎস।", tags: ["বোমা", "মহাকাশ"] },
+        { num: 95, sym: "Am", name: "Americium", mass: "243", melt: "1176 °C", boil: "2011 °C", origin: "প্লুটোনিয়াম থেকে তৈরি।", desc: "ধোঁয়া শনাক্তকারী যন্ত্রে (Smoke Detector) ব্যবহৃত।", tags: ["নিরাপত্তা", "ডিটেক্টর"] },
+        { num: 96, sym: "Cm", name: "Curium", mass: "247", melt: "1345 °C", boil: "3110 °C", origin: "কুরি দম্পতির সম্মানে নাম।", desc: "মহাকাশ অভিযানে এক্স-রে স্পেকট্রোমিটারে লাগে।", tags: ["তেজস্ক্রিয়", "আলফা রে"] },
+        { num: 97, sym: "Bk", name: "Berkelium", mass: "247", melt: "986 °C", boil: "Unknown", origin: "বার্কলে ইউনিভার্সিটি।", desc: "ভারী মৌল তৈরির মাধ্যম হিসেবে কাজ করে।", tags: ["গবেষণা", "ল্যাব"] },
+        { num: 98, sym: "Cf", name: "Californium", mass: "251", melt: "900 °C", boil: "Unknown", origin: "কৃত্রিম ও অত্যন্ত দামী।", desc: "ক্যানসার চিকিৎসায় ও খনি অনুসন্ধানে ব্যবহৃত।", tags: ["নিউট্রন সোর্স", "দামি"] },
+        { num: 99, sym: "Es", name: "Einsteinium", mass: "252", melt: "860 °C", boil: "Unknown", origin: "বোমা বিস্ফোরণ অবশেষ।", desc: "আইনস্টাইনের নামে নাম। গবেষণায় ব্যবহৃত।", tags: ["আইনস্টাইন", "অস্থির"] },{ num: 100, sym: "Fm", name: "Fermium", mass: "257", melt: "1527 °C", boil: "Unknown", origin: "ফার্মির সম্মানে নাম।", desc: "কেবল গবেষণাগারেই সীমাবদ্ধ।", tags: ["গবেষণা", "ভারী"] },
+        { num: 101, sym: "Md", name: "Mendelevium", mass: "258", melt: "827 °C", boil: "Unknown", origin: "মেন্ডেলিফের নামে নাম।", desc: "একটি করে পরমাণু হিসেবে তৈরি করা হয়েছিল।", tags: ["ল্যাব", "বিরল"] },
+        { num: 102, sym: "No", name: "Nobelium", mass: "259", melt: "827 °C", boil: "Unknown", origin: "আলফ্রেড নোবেলের সম্মানে নাম।", desc: "অতি-ভারী তেজস্ক্রিয় মৌল।", tags: ["তেজস্ক্রিয়", "নোবেল"] },
+        { num: 103, sym: "Lr", name: "Lawrencium", mass: "266", melt: "1627 °C", boil: "Unknown", origin: "আর্নেস্ট লরেন্সের নামে নাম।", desc: "অ্যাক্টিনাইড সিরিজের শেষ মৌল।", tags: ["ভারী ধাতু", "ল্যাব"] },
+        { num: 104, sym: "Rf", name: "Rutherfordium", mass: "267", melt: "Unknown", boil: "Unknown", origin: "রাদারফোর্ডের নামে নাম।", desc: "ট্রান্স-অ্যাক্টিনাইড মৌলের শুরু।", tags: ["রাদারফোর্ড", "তেজস্ক্রিয়"] },
+        { num: 105, sym: "Db", name: "Dubnium", mass: "268", melt: "Unknown", boil: "Unknown", origin: "রাশিয়ার ডুবনা শহরের নামে।", desc: "অত্যন্ত অস্থির মৌল।", tags: ["অস্থির", "গবেষণা"] },
+        { num: 106, sym: "Sg", name: "Seaborgium", mass: "269", melt: "Unknown", boil: "Unknown", origin: "গ্লেন সিবর্গের সম্মানে নাম।", desc: "জীবিত ব্যক্তির নামে প্রথম নামকরণ।", tags: ["সিবর্গ", "ল্যাব"] },
+        { num: 107, sym: "Bh", name: "Bohrium", mass: "270", melt: "Unknown", boil: "Unknown", origin: "নীলস বোরের সম্মানে নাম।", desc: "অত্যন্ত ক্ষণস্থায়ী তেজস্ক্রিয় ধাতু।", tags: ["নীলস বোর", "গবেষণা"] },
+        { num: 108, sym: "Hs", name: "Hassium", mass: "277", melt: "Unknown", boil: "Unknown", origin: "হেসেন রাজ্যের নামে নাম।", desc: "ভারী কৃত্রিম মৌল।", tags: ["অস্থির", "ভারী"] },
+        { num: 109, sym: "Mt", name: "Meitnerium", mass: "278", melt: "Unknown", boil: "Unknown", origin: "লিস মেটনারের সম্মানে নাম।", desc: "অতি-অস্থির ল্যাব মৌল।", tags: ["গবেষণা", "ল্যাব"] },
+        { num: 110, sym: "Ds", name: "Darmstadtium", mass: "281", melt: "Unknown", boil: "Unknown", origin: "জার্মানির ডারমস্টাড শহর।", desc: "খুব কম সংখ্যক পরমাণু তৈরি হয়েছে।", tags: ["তেজস্ক্রিয়", "ল্যাব"] },
+        { num: 111, sym: "Rg", name: "Roentgenium", mass: "282", melt: "Unknown", boil: "Unknown", origin: "রন্টজেনের নামে নাম।", desc: "কৃত্রিম তেজস্ক্রিয় ধাতু।", tags: ["রন্টজেন", "গবেষণা"] },
+        { num: 112, sym: "Cn", name: "Copernicium", mass: "285", melt: "Unknown", boil: "67 °C", origin: "নিকোলাস কোপার্নিকাস।", desc: "উদ্বায়ী ধাতু, গ্যাসের মতো আচরণ করে।", tags: ["গ্যাসীয় ধাতু", "অস্থির"] },
+        { num: 113, sym: "Nh", name: "Nihonium", mass: "286", melt: "425 °C", boil: "1130 °C", origin: "জাপানি বিজ্ঞানীরা তৈরি করেন।", desc: "নিহন মানে জাপান, সেখান থেকেই নাম।", tags: ["জাপান", "তেজস্ক্রিয়"] },
+        { num: 114, sym: "Fl", name: "Flerovium", mass: "289", melt: "Unknown", boil: "-60 °C", origin: "ফ্লেরোভ ল্যাবরেটরি।", desc: "অতি-ভারী ধাতু যা গ্যাসীয় ধর্ম দেখায়।", tags: ["অস্থির", "ল্যাব"] },
+        { num: 115, sym: "Mc", name: "Moscovium", mass: "290", melt: "Unknown", boil: "Unknown", origin: "রাশিয়ার মস্কো অঞ্চল।", desc: "সপ্তম পর্যায়ের একটি কৃত্রিম মৌল।", tags: ["মস্কো", "গবেষণা"] },
+        { num: 116, sym: "Lv", name: "Livermorium", mass: "293", melt: "Unknown", boil: "Unknown", origin: "লিভারমোর ল্যাবরেটরি।", desc: "অত্যন্ত ভারী এবং তেজস্ক্রিয় ধাতু।", tags: ["ল্যাব", "তেজস্ক্রিয়"] },
+        { num: 117, sym: "Ts", name: "Tennessine", mass: "294", melt: "Unknown", boil: "Unknown", origin: "যুক্তরাষ্ট্রের টেনেসি রাজ্য।", desc: "হ্যালোজেন গ্রুপের ভারী মৌল।", tags: ["হ্যালোজেন", "নতুন"] },
+        { num: 118, sym: "Og", name: "Oganesson", mass: "294", melt: "Unknown", boil: "80 °C", origin: "ইউরি ওগানেসিয়ান।", desc: "পর্যায় সারণীর শেষ এবং সবচেয়ে ভারী মৌল।", tags: ["সবশেষে", "ভারী গ্যাস"] }
+        
+        
+        
+    ];
+
+    // Three.js Core Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 20, 60);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Stars Background
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = new Float32Array(6000 * 3);
+    for(let i = 0; i < 6000 * 3; i++) { starPos[i] = (Math.random() - 0.5) * 1500; }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 0.7, color: 0xffffff })));
+
+    let currentAtomGroup = new THREE.Group();
+    scene.add(currentAtomGroup);
+
+    function buildBohrModel(element) {
+        while(currentAtomGroup.children.length > 0){ currentAtomGroup.remove(currentAtomGroup.children[0]); }
+        
+        // Nucleus (Glow Effect)
+        const nuc = new THREE.Mesh(
+            new THREE.SphereGeometry(2.5, 32, 32),
+            new THREE.MeshPhongMaterial({ color: 0xff3300, emissive: 0xff1100, emissiveIntensity: 0.5 })
+        );
+        currentAtomGroup.add(nuc);
+
+        // Standard shell configuration if not defined
+        const shells = element.shells || calculateShells(element.num);
+        let radius = 10;
+
+        shells.forEach((count, i) => {
+            // Ring
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.05, 16, 100),
+                new THREE.MeshBasicMaterial({ color: 0x00d2ff, transparent: true, opacity: 0.3 })
+            );
+            ring.rotation.x = Math.PI / 2;
+            currentAtomGroup.add(ring);
+
+            // Electrons
+            for (let j = 0; j < count; j++) {
+                const electron = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6, 16, 16),
+                    new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0x00d2ff })
+                );
+                electron.userData = { angle: (j/count)*Math.PI*2, speed: 0.03 / (i + 1), radius: radius };
+                currentAtomGroup.add(electron);
+            }
+            radius += 6;
+        });
+        updateUI(element, shells);
+    }
+
+    function calculateShells(n) {
+        let res = [];
+        let config = [2, 8, 18, 32, 32, 18, 8];
+        for(let c of config) {
+            if(n <= 0) break;
+            let take = Math.min(n, c);
+            res.push(take);
+            n -= take;
+        }
+        return res;
+    }
+
+    function updateUI(data, shells) {
+        const display = document.getElementById('data-display');
+        display.style.display = 'block';
+        document.getElementById('m-name').innerText = data.name;
+        document.getElementById('m-sym').innerText = data.sym;
+        document.getElementById('m-num').innerText = data.num;
+        document.getElementById('m-mass').innerText = data.mass;
+        document.getElementById('m-melt').innerText = data.melt;
+        document.getElementById('m-boil').innerText = data.boil;
+        document.getElementById('m-desc').innerText = data.desc;
+        document.getElementById('m-shell-val').innerText = shells.join(" - ");
+    }
+
+    // Modal Toggle
+    const devBtn = document.getElementById('dev-btn');
+    const modal = document.getElementById('dev-modal');
+    function toggleModal() { modal.classList.toggle('active'); }
+    devBtn.onclick = toggleModal;
+
+    // Search Logic
+    document.getElementById('el-search').addEventListener('input', (e) => {
+        const v = e.target.value.trim().toLowerCase();
+        const res = elementDB.find(el => el.name.toLowerCase().includes(v) || el.sym.toLowerCase() === v || el.num.toString() === v);
+        if (res) buildBohrModel(res);
+    });
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const light = new THREE.PointLight(0xffffff, 1.5);
+    light.position.set(30, 30, 30);
+    scene.add(light);
+
+    function animate() {
+        requestAnimationFrame(animate);
+        currentAtomGroup.children.forEach(c => {
+            if (c.userData.speed) {
+                c.userData.angle += c.userData.speed;
+                c.position.x = Math.cos(c.userData.angle) * c.userData.radius;
+                c.position.z = Math.sin(c.userData.angle) * c.userData.radius;
+            }
+        });
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    buildBohrModel(elementDB[0]);
+    animate();
+</script>
+</body>
+</html>
